@@ -125,6 +125,12 @@ export default function AssetsClient({
                             {a.acquired_date ? new Date(a.acquired_date).getFullYear() : "-"}
                           </td>
                           <td className="px-4 py-3 text-right whitespace-nowrap">
+                            <Link
+                              href={`/assets/${a.id}/history`}
+                              className="text-ink/60 hover:text-moss text-sm mr-3"
+                            >
+                              Riwayat
+                            </Link>
                             {isOwner ? (
                               <>
                                 <button

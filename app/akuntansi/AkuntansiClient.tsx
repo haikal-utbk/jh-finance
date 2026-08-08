@@ -117,7 +117,12 @@ export default function AkuntansiClient({
       </div>
 
       <Modal open={formOpen} onClose={() => setFormOpen(false)}>
-        <AkuntansiForm categories={categories} assets={assets} onDone={() => setFormOpen(false)} />
+        <AkuntansiForm
+          categories={categories}
+          assets={assets}
+          onDone={() => setFormOpen(false)}
+          onClose={() => setFormOpen(false)}
+        />
       </Modal>
     </>
   );

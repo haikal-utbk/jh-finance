@@ -26,16 +26,31 @@ export async function addAsset(formData: FormData) {
 
   if (!name || !categoryId || value < 0) throw new Error("Data aset tidak lengkap.");
 
-  const { error } = await supabase.from("assets").insert({
-    household_id: profile.household_id,
-    owner_id: user.id,
-    category_id: categoryId,
-    name,
-    value,
-    acquired_date: acquiredDate,
-    notes,
-  });
+  const { data: asset, error } = await supabase
+    .from("assets")
+    .insert({
+      household_id: profile.household_id,
+      owner_id: user.id,
+      category_id: categoryId,
+      name,
+      value,
+      acquired_date: acquiredDate,
+      notes,
+    })
+    .select("id")
+    .single();
   if (error) throw new Error(error.message);
+
+  if (asset) {
+    await supabase.from("asset_value_history").insert({
+      asset_id: asset.id,
+      household_id: profile.household_id,
+      changed_by: user.id,
+      value_before: 0,
+      value_after: value,
+      source: "initial",
+    });
+  }
 
   revalidatePath("/assets");
 }
@@ -56,21 +71,18 @@ export async function updateAsset(id: string, formData: FormData) {
 
   if (!name || !categoryId || value < 0) throw new Error("Data aset tidak lengkap.");
 
-  const { data, error } = await supabase
-    .from("assets")
-    .update({
-      name,
-      value,
-      category_id: categoryId,
-      acquired_date: acquiredDate,
-      notes,
-    })
-    .eq("id", id)
-    .select("id");
+  const { error } = await supabase.rpc("update_asset_with_history", {
+    p_id: id,
+    p_name: name,
+    p_value: value,
+    p_category_id: categoryId,
+    p_acquired_date: acquiredDate,
+    p_notes: notes,
+  });
   if (error) throw new Error(error.message);
-  if (!data || data.length === 0) throw new Error("Kamu tidak punya izin mengubah aset ini.");
 
   revalidatePath("/assets");
+  revalidatePath(`/assets/${id}/history`);
 }
 
 export async function deleteAsset(id: string) {

@@ -89,3 +89,27 @@ export async function deleteLedgerTransfer(id: string) {
   if (error) throw new Error(error.message);
   refresh();
 }
+
+export async function addTransactionCategory(name: string, type: "income" | "expense") {
+  const supabase = createClient();
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("Nama kategori tidak boleh kosong.");
+
+  const { error } = await supabase.from("transaction_categories").insert({ name: trimmed, type });
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/akuntansi");
+}
+
+export async function deleteTransactionCategory(id: number) {
+  const supabase = createClient();
+  const { error } = await supabase.from("transaction_categories").delete().eq("id", id);
+  if (error) {
+    if (error.code === "23503") {
+      throw new Error("Kategori ini masih dipakai, hapus/ubah catatan itu dulu.");
+    }
+    throw new Error(error.message);
+  }
+
+  revalidatePath("/akuntansi");
+}
