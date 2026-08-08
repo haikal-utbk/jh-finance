@@ -5,8 +5,15 @@ import { addTransaction } from "./actions";
 import CurrencyInput from "@/components/CurrencyInput";
 
 type Category = { id: number; name: string; type: "income" | "expense" };
+type Asset = { id: string; name: string };
 
-export default function TransactionForm({ categories }: { categories: Category[] }) {
+export default function TransactionForm({
+  categories,
+  assets,
+}: {
+  categories: Category[];
+  assets: Asset[];
+}) {
   const formRef = useRef<HTMLFormElement>(null);
   const [type, setType] = useState<"income" | "expense">("expense");
   const [loading, setLoading] = useState(false);
@@ -74,6 +81,18 @@ export default function TransactionForm({ categories }: { categories: Category[]
         <div>
           <label className="label">Keterangan</label>
           <input name="description" className="input" placeholder="Opsional" />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="label">Sumber kas</label>
+          <select name="asset_id" className="input" defaultValue="">
+            <option value="">Tidak terhubung ke aset</option>
+            {assets.map((a) => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
+          <p className="text-xs text-ink/40 mt-1">
+            Kalau dipilih, nilai aset itu otomatis bertambah/berkurang sesuai transaksi ini.
+          </p>
         </div>
       </div>
 

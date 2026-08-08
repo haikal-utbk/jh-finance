@@ -16,14 +16,20 @@ export default async function TransactionsPage() {
     .eq("id", user!.id)
     .single();
 
-  const [{ data: categories }, { data: transactions }] = await Promise.all([
+  const [{ data: categories }, { data: transactions }, { data: myAssets }] = await Promise.all([
     supabase.from("transaction_categories").select("id, name, type").order("id"),
     supabase
       .from("transactions")
-      .select("id, type, amount, date, description, user_id, transaction_categories(name), profiles(full_name)")
+      .select("id, type, amount, date, description, user_id, transaction_categories(name), profiles(full_name), assets(name)")
       .eq("household_id", profile?.household_id)
       .order("date", { ascending: false })
       .limit(100),
+    supabase
+      .from("assets")
+      .select("id, name")
+      .eq("household_id", profile?.household_id)
+      .eq("owner_id", user!.id)
+      .order("name"),
   ]);
 
   const list = (transactions ?? []) as any[];
@@ -62,6 +68,7 @@ export default async function TransactionsPage() {
                     <th className="px-4 py-3 font-medium">Tanggal</th>
                     <th className="px-4 py-3 font-medium">Kategori</th>
                     <th className="px-4 py-3 font-medium">Keterangan</th>
+                    <th className="px-4 py-3 font-medium">Kas</th>
                     <th className="px-4 py-3 font-medium text-right">Jumlah</th>
                     <th className="px-4 py-3"></th>
                   </tr>
@@ -72,6 +79,7 @@ export default async function TransactionsPage() {
                       <td className="px-4 py-3 text-ink/60">{t.date}</td>
                       <td className="px-4 py-3">{t.transaction_categories?.name}</td>
                       <td className="px-4 py-3 text-ink/60">{t.description ?? "-"}</td>
+                      <td className="px-4 py-3 text-ink/50 text-xs">{t.assets?.name ?? "-"}</td>
                       <td className={`px-4 py-3 text-right font-medium ${t.type === "income" ? "text-moss" : "text-clay"}`}>
                         {t.type === "income" ? "+" : "-"}{formatIDR(Number(t.amount))}
                       </td>
@@ -90,7 +98,7 @@ export default async function TransactionsPage() {
           ))}
         </div>
 
-        <TransactionForm categories={categories ?? []} />
+        <TransactionForm categories={categories ?? []} assets={myAssets ?? []} />
       </div>
     </AppShell>
   );

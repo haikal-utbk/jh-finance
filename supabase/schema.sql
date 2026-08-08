@@ -273,3 +273,83 @@ create policy "ubah kewajiban milik sendiri"
 create policy "hapus kewajiban milik sendiri"
   on liabilities for delete to authenticated
   using (household_id = my_household_id() and owner_id = auth.uid());
+
+-- =========================================================
+-- SINKRONISASI TRANSAKSI <-> ASET (SUMBER KAS)
+-- =========================================================
+-- Transaksi bisa ditautkan ke satu aset (mis. rekening tabungan) sebagai
+-- "sumber kas". Saat transaksi ditambah/dihapus, nilai aset itu otomatis
+-- disesuaikan. Dibungkus dalam fungsi (bukan dua panggilan terpisah dari
+-- client) supaya insert transaksi + update saldo aset atomik: kalau salah
+-- satu gagal, semuanya batal, tidak ada state "setengah jalan".
+
+alter table transactions add column if not exists asset_id uuid references assets(id) on delete set null;
+
+create or replace function public.add_transaction_with_asset_sync(
+  p_type text,
+  p_amount numeric,
+  p_category_id int,
+  p_date date,
+  p_description text,
+  p_asset_id uuid
+)
+returns uuid
+language plpgsql
+as $$
+declare
+  v_household_id uuid;
+  v_transaction_id uuid;
+  v_delta numeric;
+begin
+  select household_id into v_household_id from profiles where id = auth.uid();
+  if v_household_id is null then
+    raise exception 'Belum tergabung dalam keluarga.';
+  end if;
+
+  insert into transactions (household_id, user_id, category_id, type, amount, date, description, asset_id)
+  values (v_household_id, auth.uid(), p_category_id, p_type, p_amount, p_date, p_description, p_asset_id)
+  returning id into v_transaction_id;
+
+  if p_asset_id is not null then
+    v_delta := case when p_type = 'income' then p_amount else -p_amount end;
+    update assets set value = value + v_delta, updated_at = now() where id = p_asset_id;
+    if not found then
+      raise exception 'Aset sumber kas tidak ditemukan atau bukan milik Anda.';
+    end if;
+  end if;
+
+  return v_transaction_id;
+end;
+$$;
+
+create or replace function public.delete_transaction_with_asset_sync(p_id uuid)
+returns void
+language plpgsql
+as $$
+declare
+  v_type text;
+  v_amount numeric;
+  v_asset_id uuid;
+  v_delta numeric;
+begin
+  select type, amount, asset_id into v_type, v_amount, v_asset_id
+  from transactions where id = p_id;
+
+  if not found then
+    raise exception 'Transaksi tidak ditemukan.';
+  end if;
+
+  delete from transactions where id = p_id;
+  if not found then
+    raise exception 'Kamu tidak punya izin menghapus transaksi ini.';
+  end if;
+
+  if v_asset_id is not null then
+    v_delta := case when v_type = 'income' then -v_amount else v_amount end;
+    update assets set value = value + v_delta, updated_at = now() where id = v_asset_id;
+  end if;
+end;
+$$;
+
+grant execute on function public.add_transaction_with_asset_sync(text, numeric, int, date, text, uuid) to authenticated;
+grant execute on function public.delete_transaction_with_asset_sync(uuid) to authenticated;
