@@ -14,7 +14,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Aset & Keuangan Keluarga",
+  title: "jh.finance",
   description: "Pendataan aset dan keuangan pribadi/keluarga",
 };
 
