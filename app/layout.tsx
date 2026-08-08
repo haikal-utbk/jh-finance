@@ -16,6 +16,15 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "jh.finance",
   description: "Pendataan aset dan keuangan pribadi/keluarga",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "jh.finance",
+  },
+};
+
+export const viewport = {
+  themeColor: "#2F5545",
 };
 
 export default function RootLayout({
