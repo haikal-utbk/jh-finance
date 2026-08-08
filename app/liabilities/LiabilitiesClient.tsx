@@ -97,6 +97,7 @@ export default function LiabilitiesClient({
               <h2 className="font-display text-lg text-clay">{og.ownerName}</h2>
               <span className="text-sm font-medium text-clay">{formatIDR(og.ownerTotal)}</span>
             </div>
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-paper text-ink/60 text-left">
                 <tr>
@@ -155,6 +156,7 @@ export default function LiabilitiesClient({
                 );
               })}
             </table>
+            </div>
           </div>
         ))}
       </div>

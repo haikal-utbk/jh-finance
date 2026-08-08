@@ -97,6 +97,7 @@ export default function AssetsClient({
               <h2 className="font-display text-lg text-moss">{og.ownerName}</h2>
               <span className="text-sm font-medium text-moss">{formatIDR(og.ownerTotal)}</span>
             </div>
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-paper text-ink/60 text-left">
                 <tr>
@@ -161,6 +162,7 @@ export default function AssetsClient({
                 );
               })}
             </table>
+            </div>
           </div>
         ))}
       </div>

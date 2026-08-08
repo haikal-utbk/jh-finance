@@ -71,6 +71,7 @@ export default async function AssetHistoryPage({
       </form>
 
       <div className="card p-0 overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-paper text-ink/60 text-left">
             <tr>
@@ -107,6 +108,7 @@ export default async function AssetHistoryPage({
             })}
           </tbody>
         </table>
+        </div>
       </div>
     </AppShell>
   );

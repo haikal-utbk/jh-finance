@@ -75,6 +75,7 @@ export default function AkuntansiClient({
                 <span className="text-clay font-medium">-{formatIDR(og.expense)}</span>
               </span>
             </div>
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-paper text-ink/60 text-left">
                 <tr>
@@ -112,6 +113,7 @@ export default function AkuntansiClient({
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         ))}
       </div>

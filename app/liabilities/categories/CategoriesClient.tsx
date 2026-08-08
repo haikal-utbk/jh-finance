@@ -48,6 +48,7 @@ export default function CategoriesClient({ categories }: { categories: Category[
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 card p-0 overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-paper text-ink/60 text-left">
               <tr>
@@ -79,6 +80,7 @@ export default function CategoriesClient({ categories }: { categories: Category[
               ))}
             </tbody>
           </table>
+          </div>
         </div>
 
         <form ref={formRef} action={handleSubmit} className="card space-y-4 h-fit">

@@ -1,14 +1,5 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import SignOutButton from "./SignOutButton";
-
-const NAV_ITEMS = [
-  { href: "/dashboard", label: "Ringkasan" },
-  { href: "/assets", label: "Aset" },
-  { href: "/liabilities", label: "Kewajiban" },
-  { href: "/akuntansi", label: "Akuntansi" },
-  { href: "/reports", label: "Laporan" },
-];
+import AppShellClient from "./AppShellClient";
 
 export default async function AppShell({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
@@ -38,31 +29,8 @@ export default async function AppShell({ children }: { children: React.ReactNode
   }
 
   return (
-    <div className="min-h-screen flex">
-      <aside className="w-60 border-r border-line bg-white flex flex-col">
-        <div className="p-5 border-b border-line">
-          <p className="font-display text-lg leading-tight">{household?.name ?? "Keluarga"}</p>
-          {household && (
-            <p className="text-xs text-ink/50 mt-1">Kode undangan: {household.invite_code}</p>
-          )}
-        </div>
-        <nav className="flex-1 p-3 space-y-1">
-          {NAV_ITEMS.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="block rounded-card px-3 py-2 text-sm text-ink/80 hover:bg-moss/10 hover:text-moss"
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-        <div className="p-4 border-t border-line flex items-center justify-between">
-          <span className="text-sm text-ink/70 truncate">{profile?.full_name ?? user?.email}</span>
-          <SignOutButton />
-        </div>
-      </aside>
-      <main className="flex-1 p-6 md:p-10">{children}</main>
-    </div>
+    <AppShellClient household={household} displayName={profile?.full_name ?? user?.email ?? ""}>
+      {children}
+    </AppShellClient>
   );
 }
