@@ -73,7 +73,7 @@ export default async function AkuntansiPage() {
     <AppShell>
       <AkuntansiClient
         categories={categories ?? []}
-        assets={myAssets ?? []}
+        assets={(myAssets ?? []) as any}
         rows={rows}
         currentUserId={user!.id}
       />
