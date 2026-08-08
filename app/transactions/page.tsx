@@ -26,7 +26,7 @@ export default async function TransactionsPage() {
       .limit(100),
     supabase
       .from("assets")
-      .select("id, name")
+      .select("id, name, asset_categories(name)")
       .eq("household_id", profile?.household_id)
       .eq("owner_id", user!.id)
       .order("name"),

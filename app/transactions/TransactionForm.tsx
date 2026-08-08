@@ -5,7 +5,7 @@ import { addTransaction } from "./actions";
 import CurrencyInput from "@/components/CurrencyInput";
 
 type Category = { id: number; name: string; type: "income" | "expense" };
-type Asset = { id: string; name: string };
+type Asset = { id: string; name: string; asset_categories: { name: string } | null };
 
 export default function TransactionForm({
   categories,
@@ -21,6 +21,13 @@ export default function TransactionForm({
   const [formVersion, setFormVersion] = useState(0);
 
   const filtered = categories.filter((c) => c.type === type);
+
+  const assetGroups = Array.from(
+    new Set(assets.map((a) => a.asset_categories?.name ?? "Lainnya"))
+  ).map((catName) => ({
+    catName,
+    items: assets.filter((a) => (a.asset_categories?.name ?? "Lainnya") === catName),
+  }));
 
   async function handleSubmit(formData: FormData) {
     setLoading(true);
@@ -86,8 +93,12 @@ export default function TransactionForm({
           <label className="label">Sumber kas</label>
           <select name="asset_id" className="input" defaultValue="">
             <option value="">Tidak terhubung ke aset</option>
-            {assets.map((a) => (
-              <option key={a.id} value={a.id}>{a.name}</option>
+            {assetGroups.map((g) => (
+              <optgroup key={g.catName} label={g.catName}>
+                {g.items.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </optgroup>
             ))}
           </select>
           <p className="text-xs text-ink/40 mt-1">

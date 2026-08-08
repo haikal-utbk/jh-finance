@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { href: "/assets", label: "Aset" },
   { href: "/liabilities", label: "Kewajiban" },
   { href: "/transactions", label: "Transaksi" },
+  { href: "/journal", label: "Jurnal" },
   { href: "/reports", label: "Laporan" },
 ];
 

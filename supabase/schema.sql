@@ -353,3 +353,111 @@ $$;
 
 grant execute on function public.add_transaction_with_asset_sync(text, numeric, int, date, text, uuid) to authenticated;
 grant execute on function public.delete_transaction_with_asset_sync(uuid) to authenticated;
+
+-- =========================================================
+-- JURNAL (mutasi antar aset: transfer kas, pelunasan piutang, dll)
+-- =========================================================
+-- Untuk hal yang bukan pemasukan/pengeluaran baru, tapi cuma memindahkan
+-- nilai dari satu aset ke aset lain (mis. tarik tunai dari Tabungan ke
+-- Kas, atau piutang yang dibayar sehingga nilainya pindah ke rekening).
+-- Tidak masuk hitungan pemasukan/pengeluaran transaksi, karena bukan
+-- uang baru -- cuma berpindah bentuk.
+
+create table if not exists journal_entries (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  user_id uuid not null references profiles(id) on delete cascade,
+  from_asset_id uuid not null references assets(id),
+  to_asset_id uuid not null references assets(id),
+  amount numeric(16,2) not null check (amount > 0),
+  description text,
+  date date not null default current_date,
+  created_at timestamptz not null default now(),
+  check (from_asset_id <> to_asset_id)
+);
+
+create index if not exists idx_journal_household on journal_entries(household_id);
+
+alter table journal_entries enable row level security;
+
+create policy "lihat jurnal sehousehold"
+  on journal_entries for select to authenticated
+  using (household_id = my_household_id());
+
+create policy "tambah jurnal untuk household sendiri"
+  on journal_entries for insert to authenticated
+  with check (household_id = my_household_id() and user_id = auth.uid());
+
+create policy "hapus jurnal milik sendiri"
+  on journal_entries for delete to authenticated
+  using (household_id = my_household_id() and user_id = auth.uid());
+
+create or replace function public.add_journal_entry(
+  p_from_asset_id uuid,
+  p_to_asset_id uuid,
+  p_amount numeric,
+  p_description text,
+  p_date date
+)
+returns uuid
+language plpgsql
+as $$
+declare
+  v_household_id uuid;
+  v_entry_id uuid;
+begin
+  select household_id into v_household_id from profiles where id = auth.uid();
+  if v_household_id is null then
+    raise exception 'Belum tergabung dalam keluarga.';
+  end if;
+
+  if p_from_asset_id = p_to_asset_id then
+    raise exception 'Aset asal dan tujuan tidak boleh sama.';
+  end if;
+
+  insert into journal_entries (household_id, user_id, from_asset_id, to_asset_id, amount, description, date)
+  values (v_household_id, auth.uid(), p_from_asset_id, p_to_asset_id, p_amount, p_description, p_date)
+  returning id into v_entry_id;
+
+  update assets set value = value - p_amount, updated_at = now() where id = p_from_asset_id;
+  if not found then
+    raise exception 'Aset asal tidak ditemukan atau bukan milik Anda.';
+  end if;
+
+  update assets set value = value + p_amount, updated_at = now() where id = p_to_asset_id;
+  if not found then
+    raise exception 'Aset tujuan tidak ditemukan atau bukan milik Anda.';
+  end if;
+
+  return v_entry_id;
+end;
+$$;
+
+create or replace function public.delete_journal_entry(p_id uuid)
+returns void
+language plpgsql
+as $$
+declare
+  v_from_asset_id uuid;
+  v_to_asset_id uuid;
+  v_amount numeric;
+begin
+  select from_asset_id, to_asset_id, amount into v_from_asset_id, v_to_asset_id, v_amount
+  from journal_entries where id = p_id;
+
+  if not found then
+    raise exception 'Entri jurnal tidak ditemukan.';
+  end if;
+
+  delete from journal_entries where id = p_id;
+  if not found then
+    raise exception 'Kamu tidak punya izin menghapus entri ini.';
+  end if;
+
+  update assets set value = value + v_amount, updated_at = now() where id = v_from_asset_id;
+  update assets set value = value - v_amount, updated_at = now() where id = v_to_asset_id;
+end;
+$$;
+
+grant execute on function public.add_journal_entry(uuid, uuid, numeric, text, date) to authenticated;
+grant execute on function public.delete_journal_entry(uuid) to authenticated;
