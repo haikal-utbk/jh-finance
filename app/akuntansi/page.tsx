@@ -27,7 +27,7 @@ export default async function AkuntansiPage() {
         .order("name"),
       supabase
         .from("transactions")
-        .select("id, type, amount, date, description, user_id, category_id, asset_id, transaction_categories(name), profiles(full_name), assets(name)")
+        .select("id, type, amount, date, description, user_id, category_id, asset_id, batch_id, transaction_categories(name), profiles(full_name), assets(name)")
         .eq("household_id", householdId)
         .order("date", { ascending: false })
         .limit(200),
@@ -41,7 +41,13 @@ export default async function AkuntansiPage() {
         .limit(200),
     ]);
 
-  const txRows = ((transactions ?? []) as any[]).map((t) => ({
+  const txList = (transactions ?? []) as any[];
+  const batchCounts = new Map<string, number>();
+  for (const t of txList) {
+    if (t.batch_id) batchCounts.set(t.batch_id, (batchCounts.get(t.batch_id) ?? 0) + 1);
+  }
+
+  const txRows = txList.map((t) => ({
     id: t.id,
     kind: "transaction" as const,
     date: t.date,
@@ -55,6 +61,7 @@ export default async function AkuntansiPage() {
     type: t.type as "income" | "expense",
     categoryId: t.category_id,
     assetId: t.asset_id,
+    batchSize: t.batch_id ? batchCounts.get(t.batch_id) ?? 1 : 1,
   }));
 
   const transferRows = ((transfers ?? []) as any[]).map((j) => ({

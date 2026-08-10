@@ -23,6 +23,7 @@ export async function addLedgerTransaction(formData: FormData) {
   const date = String(formData.get("date") ?? "");
   const description = String(formData.get("description") ?? "").trim() || null;
   const assetId = String(formData.get("asset_id") ?? "").trim();
+  const batchId = String(formData.get("batch_id") ?? "").trim() || null;
 
   if (!["income", "expense"].includes(type) || amount <= 0 || !categoryId || !date) {
     throw new Error("Data transaksi tidak lengkap.");
@@ -38,6 +39,7 @@ export async function addLedgerTransaction(formData: FormData) {
     p_date: date,
     p_description: description,
     p_asset_id: assetId,
+    p_batch_id: batchId,
   });
   if (error) throw new Error(error.message);
 
@@ -60,7 +62,7 @@ export async function updateLedgerTransaction(id: string, formData: FormData) {
     throw new Error("Sumber kas wajib dipilih.");
   }
 
-  const { error } = await supabase.rpc("update_transaction_with_asset_sync", {
+  const { error } = await supabase.rpc("update_transaction_with_asset_sync_batch", {
     p_id: id,
     p_type: type,
     p_amount: amount,

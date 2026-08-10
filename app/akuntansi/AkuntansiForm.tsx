@@ -26,6 +26,7 @@ export type EditingRow = {
   assetId?: string;
   fromAssetId?: string;
   toAssetId?: string;
+  batchSize?: number;
 } | null;
 
 function newLineKey() {
@@ -111,6 +112,7 @@ export default function AkuntansiForm({
         const categoryIds = formData.getAll("category_id") as string[];
         const amounts = formData.getAll("amount") as string[];
         const descriptions = formData.getAll("description") as string[];
+        const batchId = categoryIds.length > 1 ? crypto.randomUUID() : null;
 
         for (let i = 0; i < categoryIds.length; i++) {
           const lineData = new FormData();
@@ -120,6 +122,7 @@ export default function AkuntansiForm({
           lineData.set("date", date);
           lineData.set("description", descriptions[i] ?? "");
           lineData.set("asset_id", assetId);
+          if (batchId) lineData.set("batch_id", batchId);
           await addLedgerTransaction(lineData);
         }
       }
@@ -230,6 +233,13 @@ export default function AkuntansiForm({
         </div>
       ) : (
         <div className="space-y-4">
+          {isEditing && editing && editing.batchSize && editing.batchSize > 1 && (
+            <p className="text-xs text-gold bg-gold/10 border border-gold/30 rounded-card px-3 py-2">
+              Catatan ini bagian dari {editing.batchSize} catatan yang di-input bersamaan.
+              Mengubah Tanggal atau {assetLabel} akan berlaku untuk semuanya; kategori & jumlah tetap
+              hanya untuk baris ini.
+            </p>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="label">Tanggal</label>

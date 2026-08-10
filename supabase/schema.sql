@@ -832,3 +832,100 @@ $$;
 
 grant execute on function public.update_transaction_with_asset_sync(uuid, text, numeric, int, date, text, uuid) to authenticated;
 grant execute on function public.update_journal_entry(uuid, uuid, uuid, numeric, text, date) to authenticated;
+
+-- =========================================================
+-- BATCH TRANSAKSI (input multi-baris yang saling tertaut)
+-- =========================================================
+-- Baris-baris yang di-input bersamaan lewat "+ Tambah baris" berbagi
+-- batch_id yang sama. Mengubah tanggal/sumber kas salah satu anggota
+-- batch akan ikut mengubah semua anggota lainnya (kategori & jumlah
+-- masing-masing tetap independen).
+
+alter table transactions add column if not exists batch_id uuid;
+create index if not exists idx_transactions_batch on transactions(batch_id) where batch_id is not null;
+
+-- Signature berubah (tambah p_batch_id) -- drop versi lama dulu supaya
+-- tidak ada dua fungsi dengan nama sama yang ambigu.
+drop function if exists public.add_transaction_with_asset_sync(text, numeric, int, date, text, uuid);
+
+create or replace function public.add_transaction_with_asset_sync(
+  p_type text,
+  p_amount numeric,
+  p_category_id int,
+  p_date date,
+  p_description text,
+  p_asset_id uuid,
+  p_batch_id uuid default null
+)
+returns uuid
+language plpgsql
+as $$
+declare
+  v_household_id uuid;
+  v_transaction_id uuid;
+  v_delta numeric;
+  v_value_before numeric;
+  v_value_after numeric;
+begin
+  select household_id into v_household_id from profiles where id = auth.uid();
+  if v_household_id is null then
+    raise exception 'Belum tergabung dalam keluarga.';
+  end if;
+
+  insert into transactions (household_id, user_id, category_id, type, amount, date, description, asset_id, batch_id)
+  values (v_household_id, auth.uid(), p_category_id, p_type, p_amount, p_date, p_description, p_asset_id, p_batch_id)
+  returning id into v_transaction_id;
+
+  if p_asset_id is not null then
+    v_delta := case when p_type = 'income' then p_amount else -p_amount end;
+
+    select value into v_value_before from assets where id = p_asset_id;
+
+    update assets set value = value + v_delta, updated_at = now() where id = p_asset_id
+    returning value into v_value_after;
+    if not found then
+      raise exception 'Aset sumber kas tidak ditemukan atau bukan milik Anda.';
+    end if;
+
+    insert into asset_value_history (asset_id, household_id, changed_by, value_before, value_after, source, reference_id, date)
+    values (p_asset_id, v_household_id, auth.uid(), v_value_before, v_value_after, 'transaction', v_transaction_id, p_date);
+  end if;
+
+  return v_transaction_id;
+end;
+$$;
+
+create or replace function public.update_transaction_with_asset_sync_batch(
+  p_id uuid,
+  p_type text,
+  p_amount numeric,
+  p_category_id int,
+  p_date date,
+  p_description text,
+  p_asset_id uuid
+)
+returns void
+language plpgsql
+as $$
+declare
+  v_batch_id uuid;
+  r record;
+begin
+  perform public.update_transaction_with_asset_sync(p_id, p_type, p_amount, p_category_id, p_date, p_description, p_asset_id);
+
+  select batch_id into v_batch_id from transactions where id = p_id;
+
+  if v_batch_id is not null then
+    for r in
+      select id, type, amount, category_id, description
+      from transactions
+      where batch_id = v_batch_id and id <> p_id
+    loop
+      perform public.update_transaction_with_asset_sync(r.id, r.type, r.amount, r.category_id, p_date, r.description, p_asset_id);
+    end loop;
+  end if;
+end;
+$$;
+
+grant execute on function public.add_transaction_with_asset_sync(text, numeric, int, date, text, uuid, uuid) to authenticated;
+grant execute on function public.update_transaction_with_asset_sync_batch(uuid, text, numeric, int, date, text, uuid) to authenticated;

@@ -26,6 +26,7 @@ type LedgerRow = {
   assetId?: string;
   fromAssetId?: string;
   toAssetId?: string;
+  batchSize?: number;
 };
 
 export default function AkuntansiClient({
@@ -87,6 +88,7 @@ export default function AkuntansiClient({
         assetId: editingRow.assetId,
         fromAssetId: editingRow.fromAssetId,
         toAssetId: editingRow.toAssetId,
+        batchSize: editingRow.batchSize,
       }
     : null;
 
