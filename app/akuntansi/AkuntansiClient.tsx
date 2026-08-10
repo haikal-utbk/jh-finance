@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import Link from "next/link";
 import { formatIDR } from "@/lib/format";
 import AkuntansiForm, { EditingRow } from "./AkuntansiForm";
@@ -43,6 +43,7 @@ export default function AkuntansiClient({
 }) {
   const [formOpen, setFormOpen] = useState(false);
   const [editingRow, setEditingRow] = useState<LedgerRow | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const ownerIds = Array.from(new Set(rows.map((r) => r.userId)));
   const ownerGroups = ownerIds
@@ -53,10 +54,15 @@ export default function AkuntansiClient({
       const expense = items.filter((r) => r.sign === "-").reduce((s, r) => s + r.amount, 0);
 
       const assetLabels = Array.from(new Set(items.map((r) => r.assetLabel)));
-      const assetGroups = assetLabels.map((label) => ({
-        label,
-        items: items.filter((r) => r.assetLabel === label),
-      }));
+      const assetGroups = assetLabels.map((label) => {
+        const assetItems = items.filter((r) => r.assetLabel === label);
+        const codes = Array.from(new Set(assetItems.map((r) => r.code ?? r.id)));
+        const codeGroups = codes.map((code) => ({
+          code,
+          items: assetItems.filter((r) => (r.code ?? r.id) === code),
+        }));
+        return { label, codeGroups };
+      });
 
       return { uid, ownerName, assetGroups, income, expense };
     })
@@ -77,6 +83,15 @@ export default function AkuntansiClient({
     setEditingRow(null);
   }
 
+  function toggle(key: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
   const editing: EditingRow = editingRow
     ? {
         id: editingRow.id,
@@ -92,6 +107,38 @@ export default function AkuntansiClient({
         batchSize: editingRow.batchSize,
       }
     : null;
+
+  function renderRow(r: LedgerRow, indent: boolean) {
+    return (
+      <tr key={`${r.kind}-${r.id}`} className="border-t border-line">
+        {!indent && <td className="px-4 py-3 text-ink/40 text-xs whitespace-nowrap">{r.code ?? "-"}</td>}
+        {!indent && <td className="px-4 py-3 text-ink/60">{r.date}</td>}
+        {indent && <td colSpan={2} className="px-4 py-2 pl-8 text-ink/30 text-xs">└</td>}
+        <td className="px-4 py-3">{r.label}</td>
+        <td className="px-4 py-3 text-ink/60">{r.description ?? "-"}</td>
+        <td
+          className={`px-4 py-3 text-right font-medium ${
+            r.sign === "+" ? "text-moss" : r.sign === "-" ? "text-clay" : "text-gold"
+          }`}
+        >
+          {r.sign === "+" ? "+" : r.sign === "-" ? "-" : ""}
+          {formatIDR(r.amount)}
+        </td>
+        <td className="px-4 py-3 text-right whitespace-nowrap">
+          {r.userId === currentUserId ? (
+            <>
+              <button onClick={() => openEdit(r)} className="text-ink/60 hover:text-moss text-sm mr-3">
+                Edit
+              </button>
+              <DeleteButton id={r.id} kind={r.kind} />
+            </>
+          ) : (
+            <span className="text-xs text-ink/30">Read only</span>
+          )}
+        </td>
+      </tr>
+    );
+  }
 
   return (
     <>
@@ -140,37 +187,40 @@ export default function AkuntansiClient({
                       </tr>
                     </thead>
                     <tbody>
-                      {ag.items.map((r) => (
-                        <tr key={`${r.kind}-${r.id}`} className="border-t border-line">
-                          <td className="px-4 py-3 text-ink/40 text-xs whitespace-nowrap">{r.code ?? "-"}</td>
-                          <td className="px-4 py-3 text-ink/60">{r.date}</td>
-                          <td className="px-4 py-3">{r.label}</td>
-                          <td className="px-4 py-3 text-ink/60">{r.description ?? "-"}</td>
-                          <td
-                            className={`px-4 py-3 text-right font-medium ${
-                              r.sign === "+" ? "text-moss" : r.sign === "-" ? "text-clay" : "text-gold"
-                            }`}
-                          >
-                            {r.sign === "+" ? "+" : r.sign === "-" ? "-" : ""}
-                            {formatIDR(r.amount)}
-                          </td>
-                          <td className="px-4 py-3 text-right whitespace-nowrap">
-                            {r.userId === currentUserId ? (
-                              <>
-                                <button
-                                  onClick={() => openEdit(r)}
-                                  className="text-ink/60 hover:text-moss text-sm mr-3"
-                                >
-                                  Edit
-                                </button>
-                                <DeleteButton id={r.id} kind={r.kind} />
-                              </>
-                            ) : (
-                              <span className="text-xs text-ink/30">Read only</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
+                      {ag.codeGroups.map((cg) => {
+                        if (cg.items.length === 1) {
+                          return renderRow(cg.items[0], false);
+                        }
+                        const key = `${og.uid}-${ag.label}-${cg.code}`;
+                        const isOpen = expanded.has(key);
+                        const total = cg.items.reduce((s, r) => s + r.amount, 0);
+                        const sign = cg.items[0].sign;
+                        return (
+                          <Fragment key={key}>
+                            <tr
+                              onClick={() => toggle(key)}
+                              className="border-t border-line cursor-pointer hover:bg-paper/60"
+                            >
+                              <td className="px-4 py-3 text-ink/40 text-xs whitespace-nowrap">{cg.code ?? "-"}</td>
+                              <td className="px-4 py-3 text-ink/60">{cg.items[0].date}</td>
+                              <td className="px-4 py-3 text-ink/60">{cg.items.length} kategori</td>
+                              <td className="px-4 py-3 text-ink/40 text-xs">
+                                {isOpen ? "▲ tutup" : "▼ lihat rincian"}
+                              </td>
+                              <td
+                                className={`px-4 py-3 text-right font-medium ${
+                                  sign === "+" ? "text-moss" : sign === "-" ? "text-clay" : "text-gold"
+                                }`}
+                              >
+                                {sign === "+" ? "+" : sign === "-" ? "-" : ""}
+                                {formatIDR(total)}
+                              </td>
+                              <td className="px-4 py-3"></td>
+                            </tr>
+                            {isOpen && cg.items.map((r) => renderRow(r, true))}
+                          </Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
