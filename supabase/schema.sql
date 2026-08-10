@@ -700,3 +700,135 @@ create policy "kategori transaksi bisa ditambah user login"
   on transaction_categories for insert to authenticated with check (true);
 create policy "kategori transaksi bisa dihapus user login"
   on transaction_categories for delete to authenticated using (true);
+
+-- =========================================================
+-- EDIT TRANSAKSI & TRANSFER (dengan sinkronisasi ulang ke aset)
+-- =========================================================
+-- Membalik efek lama ke aset lama, lalu menerapkan efek baru ke aset
+-- baru -- dalam satu transaksi atomik, supaya nilai aset & riwayat
+-- tetap konsisten walau kategori/jumlah/aset-nya diubah.
+
+create or replace function public.update_transaction_with_asset_sync(
+  p_id uuid,
+  p_type text,
+  p_amount numeric,
+  p_category_id int,
+  p_date date,
+  p_description text,
+  p_asset_id uuid
+)
+returns void
+language plpgsql
+as $$
+declare
+  v_old_type text;
+  v_old_amount numeric;
+  v_old_asset_id uuid;
+  v_household_id uuid;
+  v_old_delta numeric;
+  v_new_delta numeric;
+  v_value_before numeric;
+  v_value_after numeric;
+begin
+  select type, amount, asset_id, household_id into v_old_type, v_old_amount, v_old_asset_id, v_household_id
+  from transactions where id = p_id;
+
+  if not found then
+    raise exception 'Catatan tidak ditemukan.';
+  end if;
+
+  update transactions
+  set type = p_type, amount = p_amount, category_id = p_category_id,
+      date = p_date, description = p_description, asset_id = p_asset_id
+  where id = p_id;
+  if not found then
+    raise exception 'Kamu tidak punya izin mengubah catatan ini.';
+  end if;
+
+  if v_old_asset_id is not null then
+    v_old_delta := case when v_old_type = 'income' then -v_old_amount else v_old_amount end;
+    update assets set value = value + v_old_delta, updated_at = now() where id = v_old_asset_id;
+    delete from asset_value_history where reference_id = p_id and source = 'transaction';
+  end if;
+
+  if p_asset_id is not null then
+    v_new_delta := case when p_type = 'income' then p_amount else -p_amount end;
+    select value into v_value_before from assets where id = p_asset_id;
+    update assets set value = value + v_new_delta, updated_at = now() where id = p_asset_id
+    returning value into v_value_after;
+    if not found then
+      raise exception 'Aset tidak ditemukan atau bukan milik Anda.';
+    end if;
+    insert into asset_value_history (asset_id, household_id, changed_by, value_before, value_after, source, reference_id, date)
+    values (p_asset_id, v_household_id, auth.uid(), v_value_before, v_value_after, 'transaction', p_id, p_date);
+  end if;
+end;
+$$;
+
+create or replace function public.update_journal_entry(
+  p_id uuid,
+  p_from_asset_id uuid,
+  p_to_asset_id uuid,
+  p_amount numeric,
+  p_description text,
+  p_date date
+)
+returns void
+language plpgsql
+as $$
+declare
+  v_old_from uuid;
+  v_old_to uuid;
+  v_old_amount numeric;
+  v_household_id uuid;
+  v_from_before numeric;
+  v_from_after numeric;
+  v_to_before numeric;
+  v_to_after numeric;
+begin
+  select from_asset_id, to_asset_id, amount, household_id into v_old_from, v_old_to, v_old_amount, v_household_id
+  from journal_entries where id = p_id;
+
+  if not found then
+    raise exception 'Entri jurnal tidak ditemukan.';
+  end if;
+
+  if p_from_asset_id = p_to_asset_id then
+    raise exception 'Aset asal dan tujuan tidak boleh sama.';
+  end if;
+
+  update journal_entries
+  set from_asset_id = p_from_asset_id, to_asset_id = p_to_asset_id,
+      amount = p_amount, description = p_description, date = p_date
+  where id = p_id;
+  if not found then
+    raise exception 'Kamu tidak punya izin mengubah entri ini.';
+  end if;
+
+  update assets set value = value + v_old_amount, updated_at = now() where id = v_old_from;
+  update assets set value = value - v_old_amount, updated_at = now() where id = v_old_to;
+  delete from asset_value_history where reference_id = p_id and source in ('transfer_out','transfer_in');
+
+  select value into v_from_before from assets where id = p_from_asset_id;
+  update assets set value = value - p_amount, updated_at = now() where id = p_from_asset_id
+  returning value into v_from_after;
+  if not found then
+    raise exception 'Aset asal tidak ditemukan atau bukan milik Anda.';
+  end if;
+
+  select value into v_to_before from assets where id = p_to_asset_id;
+  update assets set value = value + p_amount, updated_at = now() where id = p_to_asset_id
+  returning value into v_to_after;
+  if not found then
+    raise exception 'Aset tujuan tidak ditemukan atau bukan milik Anda.';
+  end if;
+
+  insert into asset_value_history (asset_id, household_id, changed_by, value_before, value_after, source, reference_id, date)
+  values (p_from_asset_id, v_household_id, auth.uid(), v_from_before, v_from_after, 'transfer_out', p_id, p_date);
+  insert into asset_value_history (asset_id, household_id, changed_by, value_before, value_after, source, reference_id, date)
+  values (p_to_asset_id, v_household_id, auth.uid(), v_to_before, v_to_after, 'transfer_in', p_id, p_date);
+end;
+$$;
+
+grant execute on function public.update_transaction_with_asset_sync(uuid, text, numeric, int, date, text, uuid) to authenticated;
+grant execute on function public.update_journal_entry(uuid, uuid, uuid, numeric, text, date) to authenticated;

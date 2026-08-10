@@ -27,14 +27,14 @@ export default async function AkuntansiPage() {
         .order("name"),
       supabase
         .from("transactions")
-        .select("id, type, amount, date, description, user_id, transaction_categories(name), profiles(full_name), assets(name)")
+        .select("id, type, amount, date, description, user_id, category_id, asset_id, transaction_categories(name), profiles(full_name), assets(name)")
         .eq("household_id", householdId)
         .order("date", { ascending: false })
         .limit(200),
       supabase
         .from("journal_entries")
         .select(
-          "id, amount, description, date, user_id, from_asset:assets!journal_entries_from_asset_id_fkey(name), to_asset:assets!journal_entries_to_asset_id_fkey(name), profiles(full_name)"
+          "id, amount, description, date, user_id, from_asset_id, to_asset_id, from_asset:assets!journal_entries_from_asset_id_fkey(name), to_asset:assets!journal_entries_to_asset_id_fkey(name), profiles(full_name)"
         )
         .eq("household_id", householdId)
         .order("date", { ascending: false })
@@ -52,6 +52,9 @@ export default async function AkuntansiPage() {
     sign: (t.type === "income" ? "+" : "-") as "+" | "-",
     userId: t.user_id,
     ownerName: t.profiles?.full_name ?? "Tidak diketahui",
+    type: t.type as "income" | "expense",
+    categoryId: t.category_id,
+    assetId: t.asset_id,
   }));
 
   const transferRows = ((transfers ?? []) as any[]).map((j) => ({
@@ -65,6 +68,8 @@ export default async function AkuntansiPage() {
     sign: "~" as const,
     userId: j.user_id,
     ownerName: j.profiles?.full_name ?? "Tidak diketahui",
+    fromAssetId: j.from_asset_id,
+    toAssetId: j.to_asset_id,
   }));
 
   const rows = [...txRows, ...transferRows].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));

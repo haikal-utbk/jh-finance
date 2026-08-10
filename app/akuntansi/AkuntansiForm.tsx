@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import {
   addLedgerTransaction,
   addLedgerTransfer,
+  updateLedgerTransaction,
+  updateLedgerTransfer,
   addTransactionCategory,
   deleteTransactionCategory,
 } from "./actions";
@@ -13,6 +15,19 @@ import CurrencyInput from "@/components/CurrencyInput";
 type Category = { id: number; name: string; type: "income" | "expense" };
 type Asset = { id: string; name: string; asset_categories: { name: string } | null };
 
+export type EditingRow = {
+  id: string;
+  kind: "transaction" | "transfer";
+  type?: "income" | "expense";
+  categoryId?: number;
+  amount: number;
+  date: string;
+  description: string | null;
+  assetId?: string;
+  fromAssetId?: string;
+  toAssetId?: string;
+} | null;
+
 function newLineKey() {
   return Math.random().toString(36).slice(2);
 }
@@ -20,17 +35,22 @@ function newLineKey() {
 export default function AkuntansiForm({
   categories,
   assets,
+  editing,
   onDone,
   onClose,
 }: {
   categories: Category[];
   assets: Asset[];
+  editing?: EditingRow;
   onDone?: () => void;
   onClose?: () => void;
 }) {
   const router = useRouter();
+  const isEditing = !!editing;
   const formRef = useRef<HTMLFormElement>(null);
-  const [mode, setMode] = useState<"expense" | "income" | "transfer">("expense");
+  const [mode, setMode] = useState<"expense" | "income" | "transfer">(
+    editing ? (editing.kind === "transfer" ? "transfer" : editing.type ?? "expense") : "expense"
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lineKeys, setLineKeys] = useState<string[]>([newLineKey()]);
@@ -77,7 +97,14 @@ export default function AkuntansiForm({
     setError(null);
     try {
       if (mode === "transfer") {
-        await addLedgerTransfer(formData);
+        if (isEditing) {
+          await updateLedgerTransfer(editing!.id, formData);
+        } else {
+          await addLedgerTransfer(formData);
+        }
+      } else if (isEditing) {
+        formData.set("type", mode);
+        await updateLedgerTransaction(editing!.id, formData);
       } else {
         const date = String(formData.get("date") ?? "");
         const assetId = String(formData.get("asset_id") ?? "");
@@ -136,13 +163,14 @@ export default function AkuntansiForm({
 
   return (
     <form ref={formRef} action={handleSubmit} className="card space-y-4">
-      <h2 className="text-lg">Tambah catatan</h2>
+      <h2 className="text-lg">{isEditing ? "Edit catatan" : "Tambah catatan"}</h2>
 
       <div className="flex gap-2">
         <button
           type="button"
+          disabled={isEditing}
           onClick={() => setMode("expense")}
-          className={`flex-1 rounded-card px-3 py-2 text-sm border ${
+          className={`flex-1 rounded-card px-3 py-2 text-sm border disabled:opacity-50 ${
             mode === "expense" ? "border-clay bg-clay/10 text-clay" : "border-line text-ink/60"
           }`}
         >
@@ -150,8 +178,9 @@ export default function AkuntansiForm({
         </button>
         <button
           type="button"
+          disabled={isEditing}
           onClick={() => setMode("income")}
-          className={`flex-1 rounded-card px-3 py-2 text-sm border ${
+          className={`flex-1 rounded-card px-3 py-2 text-sm border disabled:opacity-50 ${
             mode === "income" ? "border-moss bg-moss/10 text-moss" : "border-line text-ink/60"
           }`}
         >
@@ -159,8 +188,9 @@ export default function AkuntansiForm({
         </button>
         <button
           type="button"
+          disabled={isEditing}
           onClick={() => setMode("transfer")}
-          className={`flex-1 rounded-card px-3 py-2 text-sm border ${
+          className={`flex-1 rounded-card px-3 py-2 text-sm border disabled:opacity-50 ${
             mode === "transfer" ? "border-gold bg-gold/10 text-gold" : "border-line text-ink/60"
           }`}
         >
@@ -170,24 +200,30 @@ export default function AkuntansiForm({
 
       {mode === "transfer" ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <CurrencyInput name="amount" label="Jumlah (Rp)" required />
+          <CurrencyInput name="amount" label="Jumlah (Rp)" required defaultValue={editing?.amount} />
           <div>
             <label className="label">Tanggal</label>
-            <input name="date" type="date" className="input" required defaultValue={new Date().toISOString().slice(0, 10)} />
+            <input
+              name="date"
+              type="date"
+              className="input"
+              required
+              defaultValue={editing?.date ?? new Date().toISOString().slice(0, 10)}
+            />
           </div>
           <div className="sm:col-span-2">
             <label className="label">Keterangan</label>
-            <input name="description" className="input" placeholder="Opsional" />
+            <input name="description" className="input" placeholder="Opsional" defaultValue={editing?.description ?? ""} />
           </div>
           <div>
             <label className="label">Dari aset</label>
-            <select name="from_asset_id" className="input" required defaultValue="">
+            <select name="from_asset_id" className="input" required defaultValue={editing?.fromAssetId ?? ""}>
               {assetOptions}
             </select>
           </div>
           <div>
             <label className="label">Ke aset</label>
-            <select name="to_asset_id" className="input" required defaultValue="">
+            <select name="to_asset_id" className="input" required defaultValue={editing?.toAssetId ?? ""}>
               {assetOptions}
             </select>
           </div>
@@ -197,11 +233,17 @@ export default function AkuntansiForm({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="label">Tanggal</label>
-              <input name="date" type="date" className="input" required defaultValue={new Date().toISOString().slice(0, 10)} />
+              <input
+                name="date"
+                type="date"
+                className="input"
+                required
+                defaultValue={editing?.date ?? new Date().toISOString().slice(0, 10)}
+              />
             </div>
             <div>
               <label className="label">{assetLabel}</label>
-              <select name="asset_id" className="input" required defaultValue="">
+              <select name="asset_id" className="input" required defaultValue={editing?.assetId ?? ""}>
                 {assetOptions}
               </select>
             </div>
@@ -209,13 +251,15 @@ export default function AkuntansiForm({
 
           <div className="flex items-center justify-between">
             <label className="label mb-0">Rincian</label>
-            <button
-              type="button"
-              onClick={() => setCatManagerOpen((v) => !v)}
-              className="text-xs text-ink/50 hover:text-moss"
-            >
-              {catManagerOpen ? "Tutup kelola kategori" : "Kelola kategori"}
-            </button>
+            {!isEditing && (
+              <button
+                type="button"
+                onClick={() => setCatManagerOpen((v) => !v)}
+                className="text-xs text-ink/50 hover:text-moss"
+              >
+                {catManagerOpen ? "Tutup kelola kategori" : "Kelola kategori"}
+              </button>
+            )}
           </div>
 
           {catManagerOpen && (
@@ -258,17 +302,22 @@ export default function AkuntansiForm({
 
           {!catManagerOpen && (
             <div className="space-y-3">
-              {lineKeys.map((key, idx) => (
+              {(isEditing ? [lineKeys[0]] : lineKeys).map((key) => (
                 <div key={key} className="grid grid-cols-1 sm:grid-cols-[2fr_2fr_2fr_auto] gap-2 items-start">
-                  <select name="category_id" className="input" required defaultValue="">
+                  <select name="category_id" className="input" required defaultValue={editing?.categoryId ?? ""}>
                     <option value="" disabled>Kategori</option>
                     {filteredCategories.map((c) => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
-                  <CurrencyInput name="amount" required />
-                  <input name="description" className="input" placeholder="Keterangan (opsional)" />
-                  {lineKeys.length > 1 && (
+                  <CurrencyInput name="amount" required defaultValue={editing?.amount} />
+                  <input
+                    name="description"
+                    className="input"
+                    placeholder="Keterangan (opsional)"
+                    defaultValue={editing?.description ?? ""}
+                  />
+                  {!isEditing && lineKeys.length > 1 && (
                     <button
                       type="button"
                       onClick={() => removeLine(key)}
@@ -280,13 +329,15 @@ export default function AkuntansiForm({
                   )}
                 </div>
               ))}
-              <button
-                type="button"
-                onClick={addLine}
-                className="text-sm text-moss hover:underline"
-              >
-                + Tambah baris
-              </button>
+              {!isEditing && (
+                <button
+                  type="button"
+                  onClick={addLine}
+                  className="text-sm text-moss hover:underline"
+                >
+                  + Tambah baris
+                </button>
+              )}
             </div>
           )}
         </div>

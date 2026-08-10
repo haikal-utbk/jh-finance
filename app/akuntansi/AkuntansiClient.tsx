@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { formatIDR } from "@/lib/format";
-import AkuntansiForm from "./AkuntansiForm";
+import AkuntansiForm, { EditingRow } from "./AkuntansiForm";
 import DeleteButton from "./DeleteButton";
 import Modal from "@/components/Modal";
 
@@ -21,6 +21,11 @@ type LedgerRow = {
   sign: "+" | "-" | "~";
   userId: string;
   ownerName: string;
+  type?: "income" | "expense";
+  categoryId?: number;
+  assetId?: string;
+  fromAssetId?: string;
+  toAssetId?: string;
 };
 
 export default function AkuntansiClient({
@@ -35,6 +40,7 @@ export default function AkuntansiClient({
   currentUserId: string;
 }) {
   const [formOpen, setFormOpen] = useState(false);
+  const [editingRow, setEditingRow] = useState<LedgerRow | null>(null);
 
   const ownerIds = Array.from(new Set(rows.map((r) => r.userId)));
   const ownerGroups = ownerIds
@@ -43,9 +49,46 @@ export default function AkuntansiClient({
       const ownerName = items[0]?.ownerName ?? "Tidak diketahui";
       const income = items.filter((r) => r.sign === "+").reduce((s, r) => s + r.amount, 0);
       const expense = items.filter((r) => r.sign === "-").reduce((s, r) => s + r.amount, 0);
-      return { uid, ownerName, items, income, expense };
+
+      const assetLabels = Array.from(new Set(items.map((r) => r.assetLabel)));
+      const assetGroups = assetLabels.map((label) => ({
+        label,
+        items: items.filter((r) => r.assetLabel === label),
+      }));
+
+      return { uid, ownerName, assetGroups, income, expense };
     })
     .sort((a, b) => (a.uid === currentUserId ? -1 : b.uid === currentUserId ? 1 : 0));
+
+  function openAdd() {
+    setEditingRow(null);
+    setFormOpen(true);
+  }
+
+  function openEdit(row: LedgerRow) {
+    setEditingRow(row);
+    setFormOpen(true);
+  }
+
+  function handleDone() {
+    setFormOpen(false);
+    setEditingRow(null);
+  }
+
+  const editing: EditingRow = editingRow
+    ? {
+        id: editingRow.id,
+        kind: editingRow.kind,
+        type: editingRow.type,
+        categoryId: editingRow.categoryId,
+        amount: editingRow.amount,
+        date: editingRow.date,
+        description: editingRow.description,
+        assetId: editingRow.assetId,
+        fromAssetId: editingRow.fromAssetId,
+        toAssetId: editingRow.toAssetId,
+      }
+    : null;
 
   return (
     <>
@@ -55,7 +98,7 @@ export default function AkuntansiClient({
           <Link href="/assets/categories" className="text-sm text-ink/60 hover:text-moss">
             Kelola kategori aset
           </Link>
-          <button onClick={() => setFormOpen(true)} className="btn-primary text-sm">
+          <button onClick={openAdd} className="btn-primary text-sm">
             + Tambah catatan
           </button>
         </div>
@@ -75,54 +118,70 @@ export default function AkuntansiClient({
                 <span className="text-clay font-medium">-{formatIDR(og.expense)}</span>
               </span>
             </div>
-            <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-paper text-ink/60 text-left">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Tanggal</th>
-                  <th className="px-4 py-3 font-medium">Jenis</th>
-                  <th className="px-4 py-3 font-medium">Keterangan</th>
-                  <th className="px-4 py-3 font-medium">Aset</th>
-                  <th className="px-4 py-3 font-medium text-right">Jumlah</th>
-                  <th className="px-4 py-3"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {og.items.map((r) => (
-                  <tr key={`${r.kind}-${r.id}`} className="border-t border-line">
-                    <td className="px-4 py-3 text-ink/60">{r.date}</td>
-                    <td className="px-4 py-3">{r.label}</td>
-                    <td className="px-4 py-3 text-ink/60">{r.description ?? "-"}</td>
-                    <td className="px-4 py-3 text-ink/50 text-xs">{r.assetLabel}</td>
-                    <td
-                      className={`px-4 py-3 text-right font-medium ${
-                        r.sign === "+" ? "text-moss" : r.sign === "-" ? "text-clay" : "text-gold"
-                      }`}
-                    >
-                      {r.sign === "+" ? "+" : r.sign === "-" ? "-" : ""}
-                      {formatIDR(r.amount)}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {r.userId === currentUserId ? (
-                        <DeleteButton id={r.id} kind={r.kind} />
-                      ) : (
-                        <span className="text-xs text-ink/30">Read only</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            </div>
+
+            {og.assetGroups.map((ag) => (
+              <div key={ag.label}>
+                <div className="px-4 py-2 bg-paper text-sm font-medium text-ink/70 border-t border-line">
+                  {ag.label}
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-paper text-ink/60 text-left">
+                      <tr>
+                        <th className="px-4 py-3 font-medium">Tanggal</th>
+                        <th className="px-4 py-3 font-medium">Jenis</th>
+                        <th className="px-4 py-3 font-medium">Keterangan</th>
+                        <th className="px-4 py-3 font-medium text-right">Jumlah</th>
+                        <th className="px-4 py-3"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ag.items.map((r) => (
+                        <tr key={`${r.kind}-${r.id}`} className="border-t border-line">
+                          <td className="px-4 py-3 text-ink/60">{r.date}</td>
+                          <td className="px-4 py-3">{r.label}</td>
+                          <td className="px-4 py-3 text-ink/60">{r.description ?? "-"}</td>
+                          <td
+                            className={`px-4 py-3 text-right font-medium ${
+                              r.sign === "+" ? "text-moss" : r.sign === "-" ? "text-clay" : "text-gold"
+                            }`}
+                          >
+                            {r.sign === "+" ? "+" : r.sign === "-" ? "-" : ""}
+                            {formatIDR(r.amount)}
+                          </td>
+                          <td className="px-4 py-3 text-right whitespace-nowrap">
+                            {r.userId === currentUserId ? (
+                              <>
+                                <button
+                                  onClick={() => openEdit(r)}
+                                  className="text-ink/60 hover:text-moss text-sm mr-3"
+                                >
+                                  Edit
+                                </button>
+                                <DeleteButton id={r.id} kind={r.kind} />
+                              </>
+                            ) : (
+                              <span className="text-xs text-ink/30">Read only</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
           </div>
         ))}
       </div>
 
       <Modal open={formOpen} onClose={() => setFormOpen(false)}>
         <AkuntansiForm
+          key={editingRow ? `${editingRow.kind}-${editingRow.id}` : "new"}
           categories={categories}
           assets={assets}
-          onDone={() => setFormOpen(false)}
+          editing={editing}
+          onDone={handleDone}
           onClose={() => setFormOpen(false)}
         />
       </Modal>
