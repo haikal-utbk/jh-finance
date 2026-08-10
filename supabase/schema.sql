@@ -929,3 +929,16 @@ $$;
 
 grant execute on function public.add_transaction_with_asset_sync(text, numeric, int, date, text, uuid, uuid) to authenticated;
 grant execute on function public.update_transaction_with_asset_sync_batch(uuid, text, numeric, int, date, text, uuid) to authenticated;
+
+-- =========================================================
+-- NOMOR URUT CATATAN (otomatis, permanen)
+-- =========================================================
+-- Satu sequence dipakai bersama untuk transaksi & transfer supaya
+-- nomornya tidak bentrok saat ditampilkan gabungan di Akuntansi.
+-- Nomor diberikan otomatis oleh database saat baris dibuat, dan
+-- tidak berubah walau catatan lain dihapus.
+
+create sequence if not exists ledger_seq;
+
+alter table transactions add column if not exists seq_no bigint default nextval('ledger_seq');
+alter table journal_entries add column if not exists seq_no bigint default nextval('ledger_seq');

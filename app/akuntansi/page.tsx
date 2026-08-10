@@ -27,14 +27,14 @@ export default async function AkuntansiPage() {
         .order("name"),
       supabase
         .from("transactions")
-        .select("id, type, amount, date, description, user_id, category_id, asset_id, batch_id, transaction_categories(name), profiles(full_name), assets(name)")
+        .select("id, seq_no, type, amount, date, description, user_id, category_id, asset_id, batch_id, transaction_categories(name), profiles(full_name), assets(name)")
         .eq("household_id", householdId)
         .order("date", { ascending: false })
         .limit(200),
       supabase
         .from("journal_entries")
         .select(
-          "id, amount, description, date, user_id, from_asset_id, to_asset_id, from_asset:assets!journal_entries_from_asset_id_fkey(name), to_asset:assets!journal_entries_to_asset_id_fkey(name), profiles(full_name)"
+          "id, seq_no, amount, description, date, user_id, from_asset_id, to_asset_id, from_asset:assets!journal_entries_from_asset_id_fkey(name), to_asset:assets!journal_entries_to_asset_id_fkey(name), profiles(full_name)"
         )
         .eq("household_id", householdId)
         .order("date", { ascending: false })
@@ -49,6 +49,7 @@ export default async function AkuntansiPage() {
 
   const txRows = txList.map((t) => ({
     id: t.id,
+    seqNo: t.seq_no,
     kind: "transaction" as const,
     date: t.date,
     label: t.transaction_categories?.name ?? "-",
@@ -66,6 +67,7 @@ export default async function AkuntansiPage() {
 
   const transferRows = ((transfers ?? []) as any[]).map((j) => ({
     id: j.id,
+    seqNo: j.seq_no,
     kind: "transfer" as const,
     date: j.date,
     label: "Transfer",

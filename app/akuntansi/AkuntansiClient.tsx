@@ -12,6 +12,7 @@ type Asset = { id: string; name: string; asset_categories: { name: string } | nu
 
 type LedgerRow = {
   id: string;
+  seqNo?: number;
   kind: "transaction" | "transfer";
   date: string;
   label: string;
@@ -130,6 +131,7 @@ export default function AkuntansiClient({
                   <table className="w-full text-sm">
                     <thead className="bg-paper text-ink/60 text-left">
                       <tr>
+                        <th className="px-4 py-3 font-medium">No.</th>
                         <th className="px-4 py-3 font-medium">Tanggal</th>
                         <th className="px-4 py-3 font-medium">Jenis</th>
                         <th className="px-4 py-3 font-medium">Keterangan</th>
@@ -140,6 +142,7 @@ export default function AkuntansiClient({
                     <tbody>
                       {ag.items.map((r) => (
                         <tr key={`${r.kind}-${r.id}`} className="border-t border-line">
+                          <td className="px-4 py-3 text-ink/40 text-xs">{r.seqNo ?? "-"}</td>
                           <td className="px-4 py-3 text-ink/60">{r.date}</td>
                           <td className="px-4 py-3">{r.label}</td>
                           <td className="px-4 py-3 text-ink/60">{r.description ?? "-"}</td>
