@@ -81,7 +81,46 @@ export default async function AkuntansiPage() {
     toAssetId: j.to_asset_id,
   }));
 
-  const rows = [...txRows, ...transferRows].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  const combined = [...txRows, ...transferRows];
+
+  // Nomor kelompok: AM/AK/AT + urutan per bulan, dikelompokkan per
+  // tanggal + jenis + aset (kas) yang sama -- bukan per baris.
+  function groupKeyOf(r: (typeof combined)[number]) {
+    if (r.kind === "transfer") {
+      return { prefix: "AT", key: `${r.date}|${(r as any).fromAssetId}|${(r as any).toAssetId}` };
+    }
+    const prefix = r.sign === "+" ? "AM" : "AK";
+    return { prefix, key: `${r.date}|${(r as any).assetId}` };
+  }
+
+  const groupFirstDate = new Map<string, string>();
+  for (const r of combined) {
+    const { prefix, key } = groupKeyOf(r);
+    const fullKey = `${prefix}|${key}`;
+    if (!groupFirstDate.has(fullKey)) groupFirstDate.set(fullKey, r.date);
+  }
+
+  const sortedGroups = Array.from(groupFirstDate.entries()).sort((a, b) =>
+    a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0
+  );
+
+  const counters = new Map<string, number>();
+  const codeForGroup = new Map<string, string>();
+  for (const [fullKey, date] of sortedGroups) {
+    const prefix = fullKey.split("|")[0];
+    const [yyyy, mm] = date.split("-");
+    const monthKey = `${prefix}|${yyyy}-${mm}`;
+    const next = (counters.get(monthKey) ?? 0) + 1;
+    counters.set(monthKey, next);
+    codeForGroup.set(fullKey, `${prefix}/${String(next).padStart(2, "0")}/${mm}${yyyy.slice(2)}`);
+  }
+
+  const rows = combined
+    .map((r) => {
+      const { prefix, key } = groupKeyOf(r);
+      return { ...r, code: codeForGroup.get(`${prefix}|${key}`) ?? "-" };
+    })
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 
   return (
     <AppShell>
